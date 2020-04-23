@@ -83,6 +83,7 @@ namespace ReLoader
                 //Set new start time
                 if (Input.GetKey(KeyCode.LeftControl))
                 {
+                    if(!CheckPracticePluginActive())
                     _songStartTime = _songAudio.time;
                 }
                 _queuedLoad = true;
@@ -134,6 +135,25 @@ namespace ReLoader
             if (GameObject.Find("Song Seeker") != null)
             {
                 ForcePracticePlugin();
+            }
+        }
+
+        public bool CheckPracticePluginActive()
+        {
+            if (GameObject.Find("Song Seeker") != null)
+            {
+                GetPracticePluginTime();
+                return true;
+            }
+            return false;
+        }
+
+        public void GetPracticePluginTime()
+        {
+            PracticePlugin.SongSeeker seeker = Resources.FindObjectsOfTypeAll<PracticePlugin.SongSeeker>().FirstOrDefault();
+            if (seeker.gameObject.activeInHierarchy)
+            {
+                _songStartTime = seeker.GetProperty<float>("PlaybackPosition") * _songAudio.clip.length;
             }
         }
         public void ForcePracticePlugin()
