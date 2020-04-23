@@ -81,7 +81,7 @@ namespace ReLoader
             if (Input.GetKeyDown(KeyCode.Space))
             {
                 //Set new start time
-                if (Input.GetKey(KeyCode.LeftControl))
+                if (!Input.GetKey(KeyCode.LeftControl))
                 {
                     if(!CheckPracticePluginActive())
                     _songStartTime = _songAudio.time;
