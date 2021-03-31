@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using UnityEngine;
 using BS_Utils.Utilities;
 using System.IO;
+using System.Threading;
 namespace ReLoader
 {
 
@@ -21,13 +22,14 @@ namespace ReLoader
         private BeatmapObjectCallbackController _callbackController;
         private BeatmapObjectSpawnMovementData _originalSpawnMovementData;
         private NoteCutSoundEffectManager _seManager;
-        private BeatmapDataLoader _dataLoader = new BeatmapDataLoader();
+        private CustomLevelLoader _levelLoader;
         private StandardLevelInfoSaveData.DifficultyBeatmap _currentDiffBeatmap;
         private CustomPreviewBeatmapLevel _currentLevel;
 
         private AudioTimeSyncController.InitData _originalInitData;
         private float _songStartTime;
 
+        private CancellationTokenSource _cancelSource;
         private bool _init;
         private bool _queuedLoad = false;
         private void Awake()
@@ -40,15 +42,16 @@ namespace ReLoader
         {
             //Slight delay before grabbing needed objects
             yield return new WaitForSeconds(0.1f);
-            _timeSync = Resources.FindObjectsOfTypeAll<AudioTimeSyncController>().First();
+            _timeSync = Resources.FindObjectsOfTypeAll<AudioTimeSyncController>().LastOrDefault(x => x.isActiveAndEnabled);
             _songAudio = _timeSync.GetField<AudioSource>("_audioSource");
-            _beatmapObjectManager = Resources.FindObjectsOfTypeAll<BeatmapObjectManager>().First();
-            _spawnController = Resources.FindObjectsOfTypeAll<BeatmapObjectSpawnController>().First();
+            _levelLoader = Resources.FindObjectsOfTypeAll<CustomLevelLoader>().First();
+            _spawnController = Resources.FindObjectsOfTypeAll<BeatmapObjectSpawnController>().LastOrDefault(x => x.isActiveAndEnabled);
             _originalSpawnMovementData = _spawnController.GetField<BeatmapObjectSpawnMovementData>("_beatmapObjectSpawnMovementData");
-            _pauseController = Resources.FindObjectsOfTypeAll<PauseController>().First();
-            _callbackController = Resources.FindObjectsOfTypeAll<BeatmapObjectCallbackController>().First();
-            _seManager = Resources.FindObjectsOfTypeAll<NoteCutSoundEffectManager>().First();
-
+            _pauseController = Resources.FindObjectsOfTypeAll<PauseController>().LastOrDefault(x => x.isActiveAndEnabled);
+            _callbackController = Resources.FindObjectsOfTypeAll<BeatmapObjectCallbackController>().LastOrDefault(x => x.isActiveAndEnabled);
+            _seManager = Resources.FindObjectsOfTypeAll<NoteCutSoundEffectManager>().LastOrDefault(x => x.isActiveAndEnabled);
+            _beatmapObjectManager = _seManager.GetField<BeatmapObjectManager>("_beatmapObjectManager");
+            _cancelSource = new CancellationTokenSource();
             var level = BS_Utils.Plugin.LevelData.GameplayCoreSceneSetupData.difficultyBeatmap.level;
             if (!(level is CustomPreviewBeatmapLevel)) yield break;
             _currentLevel = level as CustomPreviewBeatmapLevel;
@@ -83,8 +86,8 @@ namespace ReLoader
                 //Set new start time
                 if (!Input.GetKey(KeyCode.LeftControl))
                 {
-                    if(!CheckPracticePluginActive())
-                    _songStartTime = _songAudio.time;
+                    if (!CheckPracticePluginActive())
+                        _songStartTime = _songAudio.time;
                 }
                 _queuedLoad = true;
                 ReloadBeatmap();
@@ -97,8 +100,10 @@ namespace ReLoader
             string filePath = Path.Combine(_currentLevel.customLevelPath, _currentDiffBeatmap.beatmapFilename);
             string leveljson = File.ReadAllText(filePath);
             //Load new beatmapdata asynchronously
-            BeatmapData newBeatmap = await Task.Run(() => _dataLoader.GetBeatmapDataFromJson(leveljson, _currentLevel.beatsPerMinute, _currentLevel.shuffle, _currentLevel.shufflePeriod));
-
+            BeatmapData newBeatmap = await _levelLoader.LoadBeatmapDataAsync(_currentLevel.customLevelPath, _currentDiffBeatmap.beatmapFilename, _currentLevel.standardLevelInfoSaveData, _cancelSource.Token);
+            GameplayCoreSceneSetupData gameSetup = BS_Utils.Plugin.LevelData.GameplayCoreSceneSetupData;
+            EnvironmentEffectsFilterPreset environmentEffectsFilterPreset = ((BeatmapDifficulty)(Enum.Parse(typeof(BeatmapDifficulty), _currentDiffBeatmap.difficulty)) == BeatmapDifficulty.ExpertPlus) ? gameSetup.playerSpecificSettings.environmentEffectsFilterExpertPlusPreset : gameSetup.playerSpecificSettings.environmentEffectsFilterDefaultPreset;
+            newBeatmap = (BeatmapData)BeatmapDataTransformHelper.CreateTransformedBeatmapData(newBeatmap, _currentLevel, gameSetup.gameplayModifiers, gameSetup.practiceSettings, gameSetup.playerSpecificSettings.leftHanded, environmentEffectsFilterPreset, gameSetup.environmentInfo.environmentIntensityReductionOptions);
             //Hotswap Beatmap
 
             ResetTimeSync();
@@ -127,6 +132,10 @@ namespace ReLoader
             AudioTimeSyncController.InitData newInitData = new AudioTimeSyncController.InitData(_originalInitData.audioClip,
                             _songStartTime, _originalInitData.songTimeOffset, _originalInitData.timeScale);
             _timeSync.SetPrivateField("_initData", newInitData);
+            _timeSync.SetField("_audioStarted", false);
+            _timeSync.SetField("_startSongTime", _songStartTime);
+            _timeSync.SetField("_songTimeOffset", _originalInitData.songTimeOffset
+                + _timeSync.GetField<FloatSO>("_audioLatency"));
             _timeSync.StartSong();
         }
 
@@ -167,7 +176,16 @@ namespace ReLoader
 
         public void DestroyObjects()
         {
-            _beatmapObjectManager.DissolveAllObjects();
+         //   _beatmapObjectManager.DissolveAllObjects();
+            var notes = _beatmapObjectManager.GetField<MemoryPoolContainer<GameNoteController>>("_gameNotePoolContainer");
+            var bombs = _beatmapObjectManager.GetField<MemoryPoolContainer<BombNoteController>>("_bombNotePoolContainer");
+            var walls = _beatmapObjectManager.GetField<MemoryPoolContainer<ObstacleController>>("_obstaclePoolContainer");
+            foreach (var note in notes.activeItems)
+                note.Dissolve(0f);
+            foreach (var bomb in bombs.activeItems)
+                bomb.Dissolve(0f);
+            foreach (var wall in walls.activeItems)
+                wall.Dissolve(0f);
         }
 
 

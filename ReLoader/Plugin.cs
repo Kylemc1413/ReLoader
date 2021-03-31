@@ -29,6 +29,7 @@ namespace ReLoader
 
         private void BSEvents_gameSceneLoaded()
         {
+            if (!BS_Utils.Plugin.LevelData.IsSet || BS_Utils.Plugin.LevelData.Mode != BS_Utils.Gameplay.Mode.Standard) return;
            bool  PracticeMode = (BS_Utils.Plugin.LevelData.GameplayCoreSceneSetupData.practiceSettings != null && !BS_Utils.Gameplay.Gamemode.IsIsolatedLevel
                    && Resources.FindObjectsOfTypeAll<MissionLevelGameplayManager>().FirstOrDefault() == null);
 
