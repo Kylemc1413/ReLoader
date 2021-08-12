@@ -103,7 +103,7 @@ namespace ReLoader
             BeatmapData newBeatmap = await _levelLoader.LoadBeatmapDataAsync(_currentLevel.customLevelPath, _currentDiffBeatmap.beatmapFilename, _currentLevel.standardLevelInfoSaveData, _cancelSource.Token);
             GameplayCoreSceneSetupData gameSetup = BS_Utils.Plugin.LevelData.GameplayCoreSceneSetupData;
             EnvironmentEffectsFilterPreset environmentEffectsFilterPreset = ((BeatmapDifficulty)(Enum.Parse(typeof(BeatmapDifficulty), _currentDiffBeatmap.difficulty)) == BeatmapDifficulty.ExpertPlus) ? gameSetup.playerSpecificSettings.environmentEffectsFilterExpertPlusPreset : gameSetup.playerSpecificSettings.environmentEffectsFilterDefaultPreset;
-            newBeatmap = (BeatmapData)BeatmapDataTransformHelper.CreateTransformedBeatmapData(newBeatmap, _currentLevel, gameSetup.gameplayModifiers, gameSetup.practiceSettings, gameSetup.playerSpecificSettings.leftHanded, environmentEffectsFilterPreset, gameSetup.environmentInfo.environmentIntensityReductionOptions);
+            newBeatmap = (BeatmapData)BeatmapDataTransformHelper.CreateTransformedBeatmapData(newBeatmap, _currentLevel, gameSetup.gameplayModifiers, gameSetup.practiceSettings, gameSetup.playerSpecificSettings.leftHanded, environmentEffectsFilterPreset, gameSetup.environmentInfo.environmentIntensityReductionOptions, true);
             //Hotswap Beatmap
 
             ResetTimeSync();
